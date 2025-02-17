@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import sessionsService from '../../../services/sessionsService';
 
-const SessionForm = ({ open, onClose, sessionData, isPromotion, componentData, tratamientoAsignadoId }) => {
+const SessionForm = ({ open, onClose, sessionData, componentData, tratamientoAsignadoId }) => {
   const [formData, setFormData] = useState({
     fecha_sesion: sessionData?.fecha_sesion ? new Date(sessionData.fecha_sesion) : new Date(),
     asistente_id: sessionData?.asistente_id || '',
     porcentaje_asistente: sessionData?.porcentaje_asistente || 0,
     estado_pago: sessionData?.estado_pago || 'Pendiente',
     realizada: sessionData?.realizada || false,
-    proxima_cita: sessionData?.proxima_cita || null,
+    proxima_cita: sessionData?.proxima_cita || '',
     comision_sumada: sessionData?.comision_sumada || 0
   });
 
@@ -81,7 +81,7 @@ const SessionForm = ({ open, onClose, sessionData, isPromotion, componentData, t
         monto_abonado: formData.estado_pago === 'PAGADO' 
           ? (componentData?.precio || sessionData?.monto || 0) 
           : 0,
-        nombre_componente: isPromotion && componentData?.nombre ? componentData.nombre : null
+        nombre_componente: componentData?.nombre
       };
   
       console.log('Sending payload:', sessionPayload);
@@ -131,11 +131,8 @@ const SessionForm = ({ open, onClose, sessionData, isPromotion, componentData, t
             </label>
             <input
               type="date"
-              value={formData.fecha_sesion.toISOString().split('T')[0]}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                fecha_sesion: new Date(e.target.value) 
-              })}
+              value={formData.proxima_cita ? formData.proxima_cita.split('T')[0] : ''}
+              onChange={(e) => setFormData({ ...formData, proxima_cita: e.target.value })}
               className="w-full border rounded-md px-3 py-2"
             />
           </div>
@@ -257,7 +254,7 @@ SessionForm.propTypes = {
   tratamientoAsignadoId: PropTypes.oneOfType([
     PropTypes.string,
     PropTypes.number
-  ]).isRequired,  // <-- Marcada como requerida
+  ]).isRequired,
 };
 
 

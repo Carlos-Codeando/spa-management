@@ -72,12 +72,24 @@ const sessionsService = {
 
 
   getSessionDetails: async (sessionId) => {
+    // Primero obtenemos los detalles base de la promoción
     const { data, error } = await supabase
       .from('tratamientos_asignados')
       .select(`
         *,
         paciente: paciente_id (*),
-        tratamiento: tratamiento_id (*),
+        tratamiento: tratamiento_id (*,
+          promocion_detalles: promocion_detalles (
+            nombre_componente,
+            cantidad_sesiones
+          )
+        ),
+        promocion_componentes!inner (
+          id,
+          tratamiento_id,
+          sesiones_asignadas,
+          sesiones_restantes
+        ),
         sesiones_realizadas (
           id,
           fecha_sesion,
@@ -86,10 +98,8 @@ const sessionsService = {
           estado_pago,
           realizada,
           porcentaje_asistente,
-          asistente:asistente_id (
-            id,
-            nombre
-          )
+          nombre_componente,
+          asistente:asistente_id (id, nombre)
         )
       `)
       .eq('id', sessionId)
@@ -100,9 +110,26 @@ const sessionsService = {
       return { error };
     }
   
-    // Transformar los datos y asegurar que monto_abonado sea un número
+    // Transformar los datos combinando promocion_detalles y promocion_componentes
     const transformedData = {
       ...data,
+      componentes: data.tratamiento.promocion_detalles.map(detalle => {
+        const componente = data.promocion_componentes.find(
+          comp => comp.tratamiento_id === detalle.nombre_componente
+        );
+        
+        const sesionesRealizadas = data.sesiones_realizadas.filter(
+          sesion => sesion.nombre_componente === detalle.nombre_componente
+        ).length;
+  
+        return {
+          id: componente?.id,
+          nombre_componente: detalle.nombre_componente,
+          sesiones_asignadas: detalle.cantidad_sesiones,
+          sesiones_restantes: componente?.sesiones_restantes || detalle.cantidad_sesiones,
+          sesiones_realizadas: sesionesRealizadas
+        };
+      }),
       sesiones_realizadas: data.sesiones_realizadas.map(sesion => ({
         ...sesion,
         asistente: sesion.asistente || { nombre: 'No asignado' },
@@ -112,9 +139,9 @@ const sessionsService = {
       }))
     };
   
-    console.log('Sesión transformada:', transformedData.sesiones_realizadas[0]); // Para debugging
     return { data: transformedData };
   },
+  
   
 
   getPromotionComponents: async (promotionId) => {
@@ -255,6 +282,68 @@ const sessionsService = {
   
     return { data, error };
   },
+
+  createPromotionSession: async (sessionData) => {
+    try {
+      const { data, error } = await supabase.rpc('crear_sesion_promocion', {
+        p_fecha_sesion: sessionData.fecha_sesion,
+        p_asistente_id: sessionData.asistente_id,
+        p_porcentaje_asistente: sessionData.porcentaje_asistente,
+        p_estado_pago: sessionData.estado_pago,
+        p_realizada: sessionData.realizada,
+        p_monto_abonado: sessionData.monto_abonado,
+        p_nombre_componente: sessionData.nombre_componente,
+        p_tratamiento_asignado_id: sessionData.tratamiento_asignado_id,
+        p_numero_sesion: sessionData.numero_sesion
+      });
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      console.error('Error creating promotion session:', error);
+      return { data: null, error };
+    }
+  },
+
+  updatePromotionSession: async (sessionId, updates, treatmentId, componentName) => {
+    try {
+      const { data, error } = await supabase.rpc('actualizar_sesion_promocion', {
+        p_sesion_id: sessionId,
+        p_realizada: updates.realizada,
+        p_estado_pago: updates.estado_pago,
+        p_monto_abonado: updates.monto_abonado,
+        p_tratamiento_asignado_id: treatmentId,
+        p_nombre_componente: componentName,
+        p_porcentaje_asistente: updates.porcentaje_asistente
+      });
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      console.error('Error updating promotion session:', error);
+      return { data: null, error };
+    }
+  },
+
+
+
+  // Función auxiliar para obtener el precio del componente
+  getComponentPrice: async (treatmentId, componentName) => {
+    try {
+      const { data, error } = await supabase
+        .from('promocion_detalles')
+        .select('precio_componente')
+        .eq('promocion_id', treatmentId)
+        .eq('nombre_componente', componentName)
+        .single();
+
+      if (error) throw error;
+      return { data: data?.precio_componente || 0, error: null };
+    } catch (error) {
+      console.error('Error getting component price:', error);
+      return { data: 0, error };
+    }
+  }
   
 };
 

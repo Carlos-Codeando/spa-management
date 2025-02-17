@@ -1,27 +1,29 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import sessionsService from '../../../services/sessionsService';
+import PromotionComponents from '../PromotionComponents/PromotionComponents';
+
 
 const SessionDetails = ({ session, onClose, onOpenForm }) => {
   const [sessionsList, setSessionsList] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadSessions = async () => {
+    const loadSessionDetails = async () => {
       try {
-        setLoadingSessions(true);
+        setLoading(true);
         const { data } = await sessionsService.getSessionDetails(session.id);
-        console.log('Response data:', data); // Verifica aquí la estructura
-        setSessionsList(data.sesiones_realizadas || []);
+        setSessionsList(data?.sesiones_realizadas || []);
       } catch (error) {
         console.error('Error loading sessions:', error);
       } finally {
+        setLoading(false);
         setLoadingSessions(false);
       }
     };
-    
-
-    if (session) loadSessions();
+ 
+    if (session) loadSessionDetails();
   }, [session]);
 
   const getPaymentStatusBadge = (estadoPago) => {
@@ -49,72 +51,32 @@ const SessionDetails = ({ session, onClose, onOpenForm }) => {
   const progreso = `${session.sesiones_asignadas - session.sesiones_restantes}/${session.sesiones_asignadas}`;
 
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">Detalle de Sesiones</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            ✕
-          </button>
+  const renderSessionContent = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Cargando...</p>
         </div>
+      );
+    }
 
-        {/* Encabezado con información general */}
-        <div className="bg-gray-100 rounded-lg p-4 mb-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Información del Paciente</h3>
-              <p><strong>Paciente:</strong> {session.paciente?.nombre}</p>
-              <p><strong>Tratamiento:</strong> {session.tratamiento?.nombre}</p>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Información Financiera</h3>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <p className="text-sm text-gray-600">Total:</p>
-                  <p className="font-bold">${session.costo_total?.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Pagado:</p>
-                  <p className="font-bold text-green-600">${session.total_pagado?.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Saldo:</p>
-                  <p className="font-bold text-red-600">${session.saldo_pendiente?.toFixed(2)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-blue-50 p-4 rounded-lg mb-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold">Progreso del tratamiento</h3>
-          <div className="flex items-center gap-2 mt-2">
-            <div className="w-48 bg-gray-200 rounded-full h-2.5">
-              <div 
-                className="bg-blue-600 h-2.5 rounded-full" 
-                style={{ width: `${((session.sesiones_asignadas - session.sesiones_restantes)/session.sesiones_asignadas)*100}%` }}
-              ></div>
-            </div>
-            <span className="text-sm text-gray-600">{progreso} sesiones</span>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-sm">Sesiones restantes: 
-            <span className="font-bold ml-1">{session.sesiones_restantes}</span>
-          </p>
-        </div>
-      </div>
-    </div>
+    if (session.tratamiento?.es_promocion) {
+      return (
+        <PromotionComponents 
+          session={{
+            ...session,
+            componentes: session.componentes || [],
+            paciente: session.paciente,
+            tratamiento_asignado_id: session.id
+          }} 
+        />
+      );
+    }
 
-        {/* Listado de sesiones */}
+    return (
+      <div className="space-y-4">
         <h3 className="text-lg font-semibold mb-4">Sesiones Registradas</h3>
-        
         {loadingSessions ? (
           <div className="w-full h-2 bg-blue-200 overflow-hidden">
             <div className="h-full bg-blue-500 animate-pulse"></div>
@@ -133,7 +95,6 @@ const SessionDetails = ({ session, onClose, onOpenForm }) => {
                   <th className="px-4 py-2 text-left">Acciones</th>
                 </tr>
               </thead>
-              
               <tbody>
                 {sessionsList.map((sesion) => (
                   <tr key={sesion.id} className="border-b hover:bg-gray-50">
@@ -142,7 +103,7 @@ const SessionDetails = ({ session, onClose, onOpenForm }) => {
                       {new Date(sesion.fecha_sesion).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">{sesion.asistente?.nombre || 'No asignado'}</td>
-                    <td className="px-4 py-2"> ${(sesion.monto_abonado || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2">${(sesion.monto_abonado || 0).toFixed(2)}</td>
                     <td className="px-4 py-2">{getPaymentStatusBadge(sesion.estado_pago)}</td>
                     <td className="px-4 py-2">{getSessionStatus(sesion.realizada)}</td>
                     <td className="px-4 py-2">
@@ -173,13 +134,77 @@ const SessionDetails = ({ session, onClose, onOpenForm }) => {
           >
             ➕ Nueva Sesión
           </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Detalle de Sesiones</h2>
           <button 
             onClick={onClose}
-            className="px-4 py-2 border rounded-md text-gray-700 hover:bg-gray-100"
+            className="text-gray-600 hover:text-gray-900"
           >
-            Cerrar
+            ✕
           </button>
         </div>
+
+        {/* Header información general */}
+        <div className="bg-gray-100 rounded-lg p-4 mb-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Información del Paciente</h3>
+              <p><strong>Paciente:</strong> {session.paciente?.nombre}</p>
+              <p><strong>Tratamiento:</strong> {session.tratamiento?.nombre}</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Información Financiera</h3>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-sm text-gray-600">Total:</p>
+                  <p className="font-bold">${session.costo_total?.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Pagado:</p>
+                  <p className="font-bold text-green-600">${session.total_pagado?.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Saldo:</p>
+                  <p className="font-bold text-red-600">${session.saldo_pendiente?.toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Barra de progreso */}
+        <div className="bg-blue-50 p-4 rounded-lg mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold">Progreso del tratamiento</h3>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="w-48 bg-gray-200 rounded-full h-2.5">
+                  <div 
+                    className="bg-blue-600 h-2.5 rounded-full" 
+                    style={{ width: `${((session.sesiones_asignadas - session.sesiones_restantes)/session.sesiones_asignadas)*100}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm text-gray-600">{progreso} sesiones</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm">Sesiones restantes: 
+                <span className="font-bold ml-1">{session.sesiones_restantes}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Contenido dinámico basado en el tipo de tratamiento */}
+        {renderSessionContent()}
       </div>
     </div>
   );
